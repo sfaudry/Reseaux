@@ -7,3 +7,7 @@ Instalation et importation de pygame (Ubuntu) : https://wiki.lereset.org/atelier
 
 
 doc pottentiellement intéréssante : https://jeux.developpez.com/tutoriels/Pygames/faire-des-jeux-avec-pygame/
+
+
+comprehension socket : https://waytolearnx.com/2020/06/socket-tcp-client-serveur-avec-python.html
+https://python.doctor/page-reseaux-sockets-python-port
