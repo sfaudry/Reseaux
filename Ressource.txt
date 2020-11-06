@@ -1,0 +1,9 @@
+Fichier contenant différentes ressources utile : 
+
+
+Depot git : github.com/sfaudry/Reseaux
+
+Instalation et importation de pygame (Ubuntu) : https://wiki.lereset.org/ateliers:pygamelab:installation
+
+
+doc pottentiellement intéréssante : https://jeux.developpez.com/tutoriels/Pygames/faire-des-jeux-avec-pygame/
