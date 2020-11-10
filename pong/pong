@@ -27,6 +27,33 @@
 import sys
 import pygame
 import socket
+import threading, sys, time, os
+
+
+class Chercker(threading.Thread,):
+    def __init__(self, conn):
+        threading.Thread.__init__(self)
+        self.running = False
+        self.conn=conn
+ 
+    def run(self):
+        """Le code que le thread devra exécuter."""
+        self.running = True
+        while self.running:
+            time.sleep(0.01)
+            data = self.conn.recv(4096)
+            print(data)
+            if data == b'':
+                self.conn.close()
+                self.running = False
+                print("Thread terminé")
+ 
+    def stop(self):
+        self.running = False
+        print("Coucou")
+        
+
+
 
 #Number of arguments
 nb_arg = len(sys.argv)
@@ -35,10 +62,14 @@ if nb_arg > 2:
     exit("Too many arguments")
 elif nb_arg == 1:
     print ("server mode")
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    #s.setblocking(0)
     s.bind(('', 9999))
     s.listen(5)
     conn, addr = s.accept()
+    check_socket = Chercker(conn)
+    check_socket.start()
 
 else:
     print("client mode")
@@ -46,10 +77,12 @@ else:
     try:
         s.connect((sys.argv[1], 9999))
         print("Successfull connection")
+        check_socket = Chercker(s)
+        check_socket.start()
     except OSError as e:
-        print(sys.argv[1])
-        exit("Connection failed")
-
+        print("Connection failed")
+        sys.exit(os.EX_OSERR)
+    
 
 # Screen setup
 
@@ -72,17 +105,28 @@ ball_coords = ball.get_rect()
 racket = pygame.image.load("image/racket.png")
 racket_coords = racket.get_rect()
 
+racket2 = pygame.image.load("image/racket.png")
+racket2_coords = racket2.get_rect()
+
 # Throw ball from center
 def throw():
     ball_coords.left = 2*width/3
     ball_coords.top = height/2
 
+# Position the adversary's racket
+def coordracket2():
+    racket2_coords.right = width
+
+coordracket2()
 throw()
 
-while True:
+while check_socket.running:
+
     for e in pygame.event.get():
         # Check for exit
         if e.type == pygame.QUIT:
+            check_socket.conn.shutdown(socket.SHUT_RDWR)
+            check_socket.conn.close()
             sys.exit()
 
         # Check for racket movements
@@ -93,7 +137,6 @@ while True:
             elif e.key == pygame.K_DOWN:
                 racket_speed[1] = 4
                 pass
-
         elif e.type == pygame.KEYUP:
             if e.key == pygame.K_UP:
                 racket_speed[1] = 0
@@ -135,7 +178,12 @@ while True:
     screen.fill(clay)
     screen.blit(ball, ball_coords)
     screen.blit(racket, racket_coords)
+    screen.blit(racket2, racket2_coords)
     pygame.display.flip()
 
     # sleep 10ms, since there is no need for more than 100Hz refresh :)
     pygame.time.delay(10)
+
+    
+
+
