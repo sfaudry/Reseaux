@@ -23,66 +23,165 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
+#---------------------------------------------------------------------------------------------------------
 
 import sys
 import pygame
 import socket
 import threading, sys, time, os
 
+#----------------------------------------Protocol explication----------------------------------------------
 
-class Chercker(threading.Thread,):
-    def __init__(self, conn):
+# protocol send data: (entity|x|y$) the "|" for separete the arguments and the "$" for separate the packet ( if you receive multiple packets at once)
+# "entity" either "Server" or "Client"
+
+#-------------------------------------------------------------------------------------------------------------------------------------------
+
+ip = ''
+port =''
+status =''
+#racket position ( for updates position adversary racket)
+rx = 0
+ry = 0
+# ball position ( for the client update the position of the ball)
+bx = 0
+by = 0
+# just for de main while 
+running = True
+
+#--------------------------Class socket_server to create the server---------------------------------------------------------
+
+
+class socket_server(threading.Thread):
+    def __init__(self, ip, port):
         threading.Thread.__init__(self)
-        self.running = False
-        self.conn=conn
- 
-    def run(self):
-        """Le code que le thread devra exécuter."""
-        self.running = True
-        while self.running:
-            time.sleep(0.01)
-            data = self.conn.recv(4096)
-            print(data)
-            if data == b'':
-                self.conn.close()
-                self.running = False
-                print("Thread terminé")
- 
-    def stop(self):
-        self.running = False
-        print("Coucou")
+        self.ip = ip
+        self.port = port
+
+
+    def start(self):
+        # initiate server socket
+        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        self.conn.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.conn.bind((self.ip, self.port))
+        self.conn.listen(5)
+        # start thread
+        threading.Thread.start(self)
+
+    # For send packet to the Client
+    def send(self, entity, x, y):
+        if hasattr(self, 'client_conn'):
+            packet = "%s|%d|%d$" % (entity, x, y)
+            self.client_conn.send(packet.encode())
         
+        
+    def run(self):
+        # the accept() in the run(self) to not block the thread
+        self.client_conn, addr = self.conn.accept()
+        while 1:
+            time.sleep(0.01)
+            # receive data
+            datas = self.client_conn.recv(4096)
+            # check if the client is disconnected
+            if datas == b'':
+                self.conn.close()
+                global running 
+                running = False
+            else:
+                print(datas)
+                datas = datas.decode().split('$')
+                for data in datas:
+                    # because the split('$') create a empty string 
+                    if data == '':
+                        continue
+                    # for separate the argument data.split('|')
+                    data = data.split('|')
+                    # in reality, the customer only sends racket information
+                    if data[0] == "racket":
+                        global rx
+                        global ry
+                        rx = int(data[1])
+                        ry = int(data[2])
+            pass
 
+#---------------------------class socket_client to create the client----------------------------------------------------------
 
+class socket_client(threading.Thread):
+    def __init__(self, ip, port):
+        threading.Thread.__init__(self)
+        self.ip = ip
+        self.port = port
 
+    def start(self):
+        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print(self.ip)
+        self.conn.connect((self.ip, self.port))
+        print("Successfull connection")
+        threading.Thread.start(self)
+
+    # for send information to the server
+    def send(self, entity, x, y):
+        packet = "%s|%d|%d$" % (entity, x, y)
+        self.conn.send(packet.encode())
+        
+    def run(self):
+        while 1:
+            time.sleep(0.01)
+            datas = self.conn.recv(4096)
+            # if the connection is off
+            if datas == b'':
+                self.conn.close()
+                global running 
+                running = False
+            else:
+                print(datas)
+                datas = datas.decode().split('$')
+                for data in datas:
+                    if data == '':
+                        continue
+                    data = data.split('|')
+                    # check if is racket of ball data
+                    if data[0] == 'ball':
+                        global bx
+                        global by
+                        bx = int(data[1])
+                        by = int(data[2])
+                    #racket data
+                    else: 
+                        global rx
+                        global ry
+                        rx = int(data[1])
+                        ry = int(data[2])
+
+#--------------------------------------------------------------------------------           
+
+#--------------------Choice of client-serveur mode -------------------------------------
 #Number of arguments
 nb_arg = len(sys.argv)
 #Testing arguments and choosing the type of connection
-if nb_arg > 2:
-    exit("Too many arguments")
-elif nb_arg == 1:
-    print ("server mode")
-    s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    #s.setblocking(0)
-    s.bind(('', 9999))
-    s.listen(5)
-    conn, addr = s.accept()
-    check_socket = Chercker(conn)
-    check_socket.start()
-
-else:
+#if there is more than one argument
+if nb_arg == 3:
+    #if three argument, client mode
     print("client mode")
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.connect((sys.argv[1], 9999))
-        print("Successfull connection")
-        check_socket = Chercker(s)
-        check_socket.start()
-    except OSError as e:
-        print("Connection failed")
-        sys.exit(os.EX_OSERR)
-    
+    ip = sys.argv[1]
+    port = int(sys.argv[2])
+    client = socket_client(ip, port)
+    client.start()
+    status = "Client"
+elif nb_arg == 1:
+    #if one argument, server mode
+    print ("server mode")
+    ip = input("Ip:\n")
+    port = int(input("Port:\n"))
+    server = socket_server(ip, port)
+    server.start()
+    status = "Server"
+elif nb_arg == 2:
+    exit("Not enough argument")   
+else:
+    exit("Too many arguments")
+
+#----------------------------------------------------------------------------------------------   
 
 # Screen setup
 
@@ -120,17 +219,15 @@ def coordracket2():
 coordracket2()
 throw()
 
-while check_socket.running:
+while running:
 
     for e in pygame.event.get():
         # Check for exit
         if e.type == pygame.QUIT:
-            check_socket.conn.shutdown(socket.SHUT_RDWR)
-            check_socket.conn.close()
             sys.exit()
 
         # Check for racket movements
-        elif e.type == pygame.KEYDOWN:
+        if e.type == pygame.KEYDOWN:
             if e.key == pygame.K_UP:
                 racket_speed[1] = -4
                 pass
@@ -144,29 +241,60 @@ while check_socket.running:
             elif e.key == pygame.K_DOWN:
                 racket_speed[1] = 0
                 pass
-
-        #else:
-        #    print(e)
+        
 
     # Move ball
-    ball_coords = ball_coords.move(ball_speed)
-    # Bounce ball on walls
-    if ball_coords.left < 0 or ball_coords.right >= width:
-        ball_speed[0] = -ball_speed[0]
-    if ball_coords.top < 0 or ball_coords.bottom >= height:
-        ball_speed[1] = -ball_speed[1]
+    # The server takes care of moving the ball
+    if status == "Server":
+        ball_coords = ball_coords.move(ball_speed)
+        # Bounce ball on walls
+        if ball_coords.left < 0 or ball_coords.right >= width:
+            ball_speed[0] = -ball_speed[0]
+        if ball_coords.top < 0 or ball_coords.bottom >= height:
+            ball_speed[1] = -ball_speed[1]
+        server.send('ball', ball_coords.centerx, ball_coords.centery)
+    else:
+        # Tle client updates the position of the ball with the information received from the server
+        ball_coords.center = (bx, by)
+    
+    if status == "Server":
+        # Move racket Server
+        racket_coords = racket_coords.move(racket_speed)
 
-    # Move racket
-    racket_coords = racket_coords.move(racket_speed)
-    # Clip racket on court
-    if racket_coords.left < 0:
-        racket_coords.left = 0
-    elif racket_coords.right >= width:
-        racket_coords.right = width-1
-    if racket_coords.top < 0:
-        racket_coords.top = 0
-    elif racket_coords.bottom >= height:
-        racket_coords.bottom = height-1
+        # Clip racket on court
+        if racket_coords.left < 0:
+            racket_coords.left = 0
+        elif racket_coords.right >= width:
+            racket_coords.right = width-1
+        if racket_coords.top < 0:
+            racket_coords.top = 0
+        elif racket_coords.bottom >= height:
+            racket_coords.bottom = height-1
+
+        # move adversary's racket (Client)
+        racket2_coords.center = (rx, ry)
+
+        # Server send racket information to the Client
+        server.send('racket', racket_coords.centerx, racket_coords.centery)
+    else:
+        # Move racket Client
+        racket2_coords = racket2_coords.move(racket_speed)
+
+        # Clip racket Client on court
+        if racket2_coords.left < 0:
+            racket2_coords.left = 0
+        elif racket_coords.right >= width:
+            racket2_coords.right = width-1
+        if racket2_coords.top < 0:
+            racket2_coords.top = 0
+        elif racket2_coords.bottom >= height:
+            racket2_coords.bottom = height-1
+
+        # Move Adversary's racket (server)
+        racket_coords.center = (rx, ry)
+        
+        # Send racket information to the server
+        client.send('racket', racket2_coords.centerx, racket2_coords.centery)
 
     # Racket reached racket position?
     if ball_coords.left <= 0:
