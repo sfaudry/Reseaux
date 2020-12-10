@@ -46,6 +46,9 @@ ry = 0
 # ball position ( for the client update the position of the ball)
 bx = 0
 by = 0
+#score
+ss = 0 # score server
+sc = 0 # score client
 # just for de main while 
 running = True
 
@@ -140,47 +143,53 @@ class socket_client(threading.Thread):
                     if data == '':
                         continue
                     data = data.split('|')
-                    # check if is racket of ball data
+                    # check if is ball, racket or score data
+                    #if ball data
                     if data[0] == 'ball':
                         global bx
                         global by
                         bx = int(data[1])
                         by = int(data[2])
-                    #racket data
-                    else: 
+                    #if racket data
+                    if data[0] == 'racket': 
                         global rx
                         global ry
                         rx = int(data[1])
                         ry = int(data[2])
+                        #if score data
+                    if data[0] == 'score':
+                        global ss
+                        global sc
+                        ss = int(data[1])
+                        sc = int(data[2])
+                        print(ss)
+                        print(sc)
 
-#--------------------------------------------------------------------------------           
+#---------------------------------------------------------------------------------------           
 
 #--------------------Choice of client-serveur mode -------------------------------------
 #Number of arguments
 nb_arg = len(sys.argv)
 #Testing arguments and choosing the type of connection
 #if there is more than one argument
-if nb_arg == 3:
-    #if three argument, client mode
-    print("client mode")
-    ip = sys.argv[1]
-    port = int(sys.argv[2])
-    client = socket_client(ip, port)
-    client.start()
-    status = "Client"
-elif nb_arg == 1:
-    #if one argument, server mode
-    print ("server mode")
-    ip = input("Ip:\n")
-    port = int(input("Port:\n"))
-    server = socket_server(ip, port)
-    server.start()
-    status = "Server"
-elif nb_arg == 2:
-    exit("Not enough argument")   
+if nb_arg == 1:
+    status = input("Server or Client ?\n")
+    if status == "Server":
+        print ("server mode")
+        ip = input("Ip:\n")
+        port = int(input("Port:\n"))
+        server = socket_server(ip, port)
+        server.start()
+    elif status == "Client":   
+        print("client mode")
+        ip = input("Ip:\n")
+        port = int(input("Port:\n"))
+        client = socket_client(ip, port)
+        client.start()
+    else:
+        exit("no valide mode")
 else:
-    exit("Too many arguments")
-
+    exit("too many arguments")
 #----------------------------------------------------------------------------------------------   
 
 # Screen setup
@@ -196,6 +205,8 @@ racket_speed = [ 0, 0 ]
 # Pygame initialization
 pygame.init()
 screen = pygame.display.set_mode( (width, height) )
+
+fontscore = pygame.font.SysFont(None, 50)
 
 # Load resources
 ball = pygame.image.load("image/ball.png")
@@ -297,17 +308,36 @@ while running:
         client.send('racket', racket2_coords.centerx, racket2_coords.centery)
 
     # Racket reached racket position?
-    if ball_coords.left <= 0:
-        if ball_coords.bottom <= racket_coords.top or ball_coords.top >= racket_coords.bottom:
-            print("lost!")
-            throw()
+    if status == 'Server':
+        if ball_coords.left <= 0:
+            if ball_coords.bottom <= racket_coords.top or ball_coords.top >= racket_coords.bottom:
+                print(" Server lost!")
+                sc += 1
+                server.send('score', ss, sc)
+                throw()
+        if ball_coords.right >=width:
+            if ball_coords.bottom <= racket2_coords.top or ball_coords.top >= racket2_coords.bottom:
+                print ('Client lost!')
+                ss += 1
+                server.send('score', ss, sc)
+                pass
+                throw()
+
+    # score
+    textscore = fontscore.render(str(ss) + ' | ' + str(sc), True, (255, 255, 255))
+    textscore_coords = textscore.get_rect()
+    textscore_coords.left = width/2 - textscore_coords.width/2
+    textscore_coords.top = 10
+    
 
     # Display everything
     screen.fill(clay)
     screen.blit(ball, ball_coords)
     screen.blit(racket, racket_coords)
     screen.blit(racket2, racket2_coords)
+    screen.blit(textscore, textscore_coords)
     pygame.display.flip()
+
 
     # sleep 10ms, since there is no need for more than 100Hz refresh :)
     pygame.time.delay(10)
