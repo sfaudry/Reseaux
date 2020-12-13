@@ -99,7 +99,7 @@ class socket_server(threading.Thread):
                         continue
                     # for separate the argument data.split('|')
                     data = data.split('|')
-                    # in reality, the customer only sends racket information
+                    # in reality, the client only sends racket information
                     if data[0] == "racket":
                         global rx
                         global ry
